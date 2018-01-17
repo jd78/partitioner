@@ -1,5 +1,7 @@
 # Partitioner
 
+[![Build Status](https://travis-ci.org/jd78/partitioner.svg?branch=master)](https://travis-ci.org/jd78/partitioner)
+
 Partitioner executes hogh order function in sequence given a partition key. Functions with the same partition key will be executed only by one partition.
 
 #### Examples 
