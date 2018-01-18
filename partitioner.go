@@ -8,7 +8,7 @@ import (
 // done chan bool: confirmation channel, true for completed, false for error and infinite retry
 type Handler func(done chan bool)
 
-type partitioner struct {
+type Partitioner struct {
 	nPart      int
 	partitions []chan Handler
 }
@@ -18,10 +18,10 @@ type PartitionId interface {
 	GetPartition() int64
 }
 
-// Partitioner create a new partition object
+// CreatePartitioner create a new partition object
 // partitions: number of partitions
 // maxWaitingRetryMilliseconds: max waiting time between retries
-func Partitioner(partitions, maxWaitingRetryMilliseconds int) partitioner {
+func CreatePartitioner(partitions, maxWaitingRetryMilliseconds int) Partitioner {
 	p := make([]chan Handler, partitions, partitions)
 	for i := 0; i < len(p); i++ {
 		p[i] = make(chan Handler, 1000)
@@ -50,13 +50,13 @@ func Partitioner(partitions, maxWaitingRetryMilliseconds int) partitioner {
 		}(i)
 	}
 
-	return partitioner{partitions, p}
+	return Partitioner{partitions, p}
 }
 
 // HandleInSequence handles the handler high order function in sequence based on the resolved partitionId
 // handler: high order function to execute
 // partitionId: PartitionId interface to get an int64 partition
-func (p partitioner) HandleInSequence(handler Handler, partitionId PartitionId) {
+func (p Partitioner) HandleInSequence(handler Handler, partitionId PartitionId) {
 	partition := partitionId.GetPartition() % int64(p.nPart)
 	p.partitions[partition] <- handler
 }
