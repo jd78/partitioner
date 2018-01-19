@@ -20,8 +20,8 @@ type PartitionId interface {
 
 // CreatePartitioner create a new partition object
 // partitions: number of partitions
-// maxWaitingRetryMilliseconds: max waiting time between retries
-func CreatePartitioner(partitions, maxWaitingRetryMilliseconds int) Partitioner {
+// maxWaitingRetry: max waiting time between retries
+func CreatePartitioner(partitions int, maxWaitingRetry time.Duration) Partitioner {
 	p := make([]chan Handler, partitions, partitions)
 	for i := 0; i < len(p); i++ {
 		p[i] = make(chan Handler, 1000)
@@ -33,16 +33,16 @@ func CreatePartitioner(partitions, maxWaitingRetryMilliseconds int) Partitioner 
 				f := <-p[partId]
 				done := make(chan bool, 1)
 				result := false
-				waiting := 20
+				waiting := 20 * time.Millisecond
 				for !result {
 					f(done)
 					result = <-done
 					if !result {
 						time.Sleep(time.Duration(waiting) * time.Millisecond)
-						if waiting < maxWaitingRetryMilliseconds {
+						if waiting < maxWaitingRetry {
 							waiting = waiting * 2
 						} else {
-							waiting = maxWaitingRetryMilliseconds
+							waiting = maxWaitingRetry
 						}
 					}
 				}
