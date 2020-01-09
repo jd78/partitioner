@@ -14,7 +14,7 @@ func (p partition) GetPartition() int64 {
 }
 
 func Test_partitioner_HandleInSequence(t *testing.T) {
-	p := CreatePartitioner(30, 5*time.Second)
+	p := Create(30, 5*time.Second)
 
 	firstExecuted := false
 	secondExecuted := false
@@ -41,7 +41,7 @@ func Test_partitioner_HandleInSequence(t *testing.T) {
 }
 
 func Test_partitioner_HandleConcurrently(t *testing.T) {
-	p := CreatePartitioner(30, 5*time.Second)
+	p := Create(30, 5*time.Second)
 
 	firstExecuted := false
 	secondExecuted := false
@@ -68,7 +68,7 @@ func Test_partitioner_HandleConcurrently(t *testing.T) {
 }
 
 func Test_partitioner_HandleInfiniteRetries(t *testing.T) {
-	p := CreatePartitioner(30, 5*time.Second)
+	p := Create(30, 5*time.Second)
 
 	secondExecuted := false
 
