@@ -14,7 +14,7 @@ func (p partition) GetPartition() int64 {
 }
 
 func Test_partitioner_HandleInSequence(t *testing.T) {
-	p := Create(30, 5*time.Second)
+	p := New(30, 5*time.Second)
 
 	firstExecuted := false
 	secondExecuted := false
@@ -41,7 +41,7 @@ func Test_partitioner_HandleInSequence(t *testing.T) {
 }
 
 func Test_partitioner_HandleConcurrently(t *testing.T) {
-	p := Create(30, 5*time.Second)
+	p := New(30, 5*time.Second)
 
 	firstExecuted := false
 	secondExecuted := false
@@ -68,7 +68,7 @@ func Test_partitioner_HandleConcurrently(t *testing.T) {
 }
 
 func Test_partitioner_HandleInfiniteRetries(t *testing.T) {
-	p := Create(30, 5*time.Second)
+	p := New(30, 5*time.Second)
 
 	secondExecuted := false
 
@@ -87,5 +87,32 @@ func Test_partitioner_HandleInfiniteRetries(t *testing.T) {
 
 	if secondExecuted {
 		t.Error("Second function should not be executed")
+	}
+}
+
+func Test_partitioner_HandleInRoundRobin(t *testing.T) {
+	p := New(30, 5*time.Second)
+
+	firstExecuted := false
+	secondExecuted := false
+
+	f1 := func(done chan bool) {
+		time.Sleep(2 * time.Second)
+		firstExecuted = true
+		done <- true
+	}
+
+	f2 := func(done chan bool) {
+		time.Sleep(2 * time.Second)
+		secondExecuted = true
+		done <- true
+	}
+
+	p.HandleInRoundRobin(f1)
+	p.HandleInRoundRobin(f2)
+	time.Sleep(2*time.Second + 2*time.Millisecond)
+
+	if !firstExecuted || !secondExecuted {
+		t.Error("Functions not executed in Round Robin")
 	}
 }

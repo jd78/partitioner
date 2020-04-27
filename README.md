@@ -7,7 +7,7 @@ Partitioner executes high order functions in sequence given a partition key. Fun
 #### Examples 
 
 ```go
-
+//Blocking Partition example
 package main
 
 import (
@@ -44,7 +44,7 @@ func (p partition) GetPartition() int64 {
 }
 
 func main() {
-	p := partitioner.Create(30, 5*time.Second) //Creates 30 partition and a max retry time interval of 5000 ms
+	p := partitioner.New(30, 5*time.Second) //Creates 30 partition and a max retry time interval of 5000 ms
 
 	for i := 0; i < 100; i++ {
 		m1 := message1{1, i} //will go on the same partition
@@ -68,6 +68,38 @@ func main() {
 			done <- true
 		}, partition{}) //Round robin example
 	}
+
+	fmt.Scanln()
+}
+
+```
+
+```go
+//Round Robin Example
+package main
+
+import (
+	"fmt"
+	"github.com/jd78/partitioner"
+	"sync/atomic"
+	"time"
+)
+
+type message1 struct {
+	id   int
+	test int
+}
+
+func main() {
+	p := partitioner.New(30, 5*time.Second) //Creates 30 partition and a max retry time interval of 5000 ms
+
+	for i := 0; i < 100; i++ {
+		m1 := message1{1, i}
+		p.HandleInRoundRobin(func(done chan bool) {
+			fmt.Printf("message1: %d\n", m1.test)
+			time.Sleep(300 * time.Millisecond)
+			done <- true
+		})
 
 	fmt.Scanln()
 }
