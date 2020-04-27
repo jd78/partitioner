@@ -1,6 +1,7 @@
 package partitioner
 
 import (
+	"sync/atomic"
 	"time"
 )
 
@@ -9,8 +10,9 @@ import (
 type Handler func(done chan bool)
 
 type Partition struct {
-	nPart      int
-	partitions []chan Handler
+	nPart         int
+	partitions    []chan Handler
+	roundRobinKey int32
 }
 
 // Partitioner interface to be passed in HandleInSequence
@@ -18,10 +20,10 @@ type Partitioner interface {
 	GetPartition() int64
 }
 
-// Create create a new partition object
+// New create a new partition object
 // partitions: number of partitions
 // maxWaitingRetry: max waiting time between retries
-func Create(partitions int, maxWaitingRetry time.Duration) *Partition {
+func New(partitions int, maxWaitingRetry time.Duration) *Partition {
 	p := make([]chan Handler, partitions, partitions)
 	for i := 0; i < len(p); i++ {
 		p[i] = make(chan Handler, 1000)
@@ -50,7 +52,7 @@ func Create(partitions int, maxWaitingRetry time.Duration) *Partition {
 		}(i)
 	}
 
-	return &Partition{partitions, p}
+	return &Partition{partitions, p, 0}
 }
 
 // HandleInSequence handles the handler high order function in sequence based on the resolved partitionId
@@ -58,5 +60,10 @@ func Create(partitions int, maxWaitingRetry time.Duration) *Partition {
 // partitionId: Partitioner interface to get an int64 partition
 func (p *Partition) HandleInSequence(handler Handler, partitionID Partitioner) {
 	partition := partitionID.GetPartition() % int64(p.nPart)
+	p.partitions[partition] <- handler
+}
+
+func (p *Partition) HandleInRoundRobin(handler Handler) {
+	partition := atomic.AddInt32(&p.roundRobinKey, 1) % int32(p.nPart)
 	p.partitions[partition] <- handler
 }
