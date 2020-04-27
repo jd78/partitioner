@@ -1,6 +1,7 @@
 package partitioner
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -19,16 +20,16 @@ func Test_partitioner_HandleInSequence(t *testing.T) {
 	firstExecuted := false
 	secondExecuted := false
 
-	f1 := func(done chan bool) {
+	f1 := func() error {
 		firstExecuted = true
 		time.Sleep(2 * time.Second)
-		done <- true
+		return nil
 	}
 
-	f2 := func(done chan bool) {
+	f2 := func() error {
 		secondExecuted = true
 		time.Sleep(2 * time.Second)
-		done <- true
+		return nil
 	}
 
 	p.HandleInSequence(f1, partition{1})
@@ -46,16 +47,16 @@ func Test_partitioner_HandleConcurrently(t *testing.T) {
 	firstExecuted := false
 	secondExecuted := false
 
-	f1 := func(done chan bool) {
+	f1 := func() error {
 		firstExecuted = true
 		time.Sleep(2 * time.Second)
-		done <- true
+		return nil
 	}
 
-	f2 := func(done chan bool) {
+	f2 := func() error {
 		secondExecuted = true
 		time.Sleep(2 * time.Second)
-		done <- true
+		return nil
 	}
 
 	p.HandleInSequence(f1, partition{1})
@@ -72,13 +73,13 @@ func Test_partitioner_HandleInfiniteRetries(t *testing.T) {
 
 	secondExecuted := false
 
-	f1 := func(done chan bool) {
-		done <- false
+	f1 := func() error {
+		return errors.New("Error")
 	}
 
-	f2 := func(done chan bool) {
+	f2 := func() error {
 		secondExecuted = true
-		done <- true
+		return nil
 	}
 
 	p.HandleInSequence(f1, partition{1})
@@ -96,16 +97,16 @@ func Test_partitioner_HandleInRoundRobin(t *testing.T) {
 	firstExecuted := false
 	secondExecuted := false
 
-	f1 := func(done chan bool) {
+	f1 := func() error {
 		time.Sleep(2 * time.Second)
 		firstExecuted = true
-		done <- true
+		return nil
 	}
 
-	f2 := func(done chan bool) {
+	f2 := func() error {
 		time.Sleep(2 * time.Second)
 		secondExecuted = true
-		done <- true
+		return nil
 	}
 
 	p.HandleInRoundRobin(f1)

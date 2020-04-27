@@ -6,8 +6,8 @@ import (
 )
 
 // Handler high order function to be executed
-// done chan bool: confirmation channel, true for completed, false for error and infinite retry
-type Handler func(done chan bool)
+// nit err for completed, otherwise infinite retry
+type Handler func() error
 
 type Partition struct {
 	nPart         int
@@ -33,19 +33,13 @@ func New(partitions int, maxWaitingRetry time.Duration) *Partition {
 		go func(partId int) {
 			for {
 				f := <-p[partId]
-				done := make(chan bool, 1)
-				result := false
 				waiting := 20 * time.Millisecond
-				for !result {
-					f(done)
-					result = <-done
-					if !result {
-						time.Sleep(time.Duration(waiting) * time.Millisecond)
-						if waiting < maxWaitingRetry {
-							waiting = waiting * 2
-						} else {
-							waiting = maxWaitingRetry
-						}
+				for f() != nil {
+					time.Sleep(time.Duration(waiting) * time.Millisecond)
+					if waiting < maxWaitingRetry {
+						waiting = waiting * 2
+					} else {
+						waiting = maxWaitingRetry
 					}
 				}
 			}
