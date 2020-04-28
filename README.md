@@ -44,7 +44,7 @@ func (p partition) GetPartition() int64 {
 }
 
 func main() {
-	p := partitioner.New(30, 5*time.Second) //Creates 30 partition and a max retry time interval of 5000 ms
+	p := partitioner.New(30, 5*time.Second).Build() //Creates 30 partition and a max retry time interval of 5000 ms
 
 	for i := 0; i < 100; i++ {
 		m1 := message1{1, i} //will go on the same partition
@@ -90,7 +90,7 @@ type message1 struct {
 }
 
 func main() {
-	p := partitioner.New(30, 5*time.Second) //Creates 30 partition and a max retry time interval of 5000 ms
+	p := partitioner.New(30, 5*time.Second).Build() //Creates 30 partition and a max retry time interval of 5000 ms
 
 	for i := 0; i < 100; i++ {
 		m1 := message1{1, i}

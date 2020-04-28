@@ -10,9 +10,12 @@ import (
 type Handler func() error
 
 type Partition struct {
-	nPart         int
-	partitions    []chan Handler
-	roundRobinKey int32
+	nPart                   int
+	partitions              []chan Handler
+	roundRobinKey           int32
+	maxWaitingRetry         time.Duration
+	maxAttempts             int
+	maxMessagesPerPartition int
 }
 
 // Partitioner interface to be passed in HandleInSequence
@@ -20,33 +23,63 @@ type Partitioner interface {
 	GetPartition() int64
 }
 
-// New create a new partition object
-// partitions: number of partitions
-// maxWaitingRetry: max waiting time between retries
-func New(partitions int, maxWaitingRetry time.Duration) *Partition {
-	p := make([]chan Handler, partitions, partitions)
-	for i := 0; i < len(p); i++ {
-		p[i] = make(chan Handler, 1000)
+//PartitionBuilder build new partitioner
+type PartitionBuilder struct {
+	p *Partition
+}
+
+//New Partition builder
+func New(partitions int, maxWaitingRetry time.Duration) *PartitionBuilder {
+	return &PartitionBuilder{&Partition{nPart: partitions, maxWaitingRetry: maxWaitingRetry, maxMessagesPerPartition: 10000}}
+}
+
+//WithMaxAttempts max attempts before discarding a message in error, not assigned or 0 = infinite retry
+func (p *PartitionBuilder) WithMaxAttempts(maxAttempts int) *PartitionBuilder {
+	p.p.maxAttempts = maxAttempts
+	return p
+}
+
+//WithMaxMessagesPerPartition default is 10000, it's the max capacity of the buffer
+func (p *PartitionBuilder) WithMaxMessagesPerPartition(maxMessages int) *PartitionBuilder {
+	p.p.maxMessagesPerPartition = maxMessages
+	return p
+}
+
+//Build builds the partitioner
+func (p *PartitionBuilder) Build() *Partition {
+	npart := p.p.nPart
+	partitions := make([]chan Handler, npart, npart)
+	for i := 0; i < npart; i++ {
+		partitions[i] = make(chan Handler, p.p.maxMessagesPerPartition)
 	}
 
-	for i := 0; i < partitions; i++ {
+	p.p.partitions = partitions
+
+	for i := 0; i < npart; i++ {
 		go func(partId int) {
 			for {
-				f := <-p[partId]
+				f := <-partitions[partId]
 				waiting := 20 * time.Millisecond
+				attempts := 0
 				for f() != nil {
-					time.Sleep(time.Duration(waiting) * time.Millisecond)
-					if waiting < maxWaitingRetry {
+					println(time.Duration(waiting) * time.Millisecond)
+					time.Sleep(time.Duration(waiting))
+					if waiting < p.p.maxWaitingRetry {
 						waiting = waiting * 2
 					} else {
-						waiting = maxWaitingRetry
+						waiting = p.p.maxWaitingRetry
+					}
+
+					attempts++
+					if p.p.maxAttempts > 0 && attempts >= p.p.maxAttempts {
+						break
 					}
 				}
 			}
 		}(i)
 	}
 
-	return &Partition{partitions, p, 0}
+	return p.p
 }
 
 // HandleInSequence handles the handler high order function in sequence based on the resolved partitionId
