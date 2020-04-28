@@ -62,7 +62,6 @@ func (p *PartitionBuilder) Build() *Partition {
 				waiting := 20 * time.Millisecond
 				attempts := 0
 				for f() != nil {
-					println(time.Duration(waiting) * time.Millisecond)
 					time.Sleep(time.Duration(waiting))
 					if waiting < p.p.maxWaitingRetry {
 						waiting = waiting * 2
