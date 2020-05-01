@@ -1,6 +1,7 @@
 package partitioner
 
 import (
+	"log"
 	"sync/atomic"
 	"time"
 )
@@ -61,7 +62,8 @@ func (p *PartitionBuilder) Build() *Partition {
 				f := <-partitions[partId]
 				waiting := 20 * time.Millisecond
 				attempts := 0
-				for f() != nil {
+				for err := f(); err != nil; err = f() {
+					log.Printf("Attempt: %d, error: %+v", attempts, err)
 					time.Sleep(time.Duration(waiting))
 					if waiting < p.p.maxWaitingRetry {
 						waiting = waiting * 2
