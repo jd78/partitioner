@@ -118,7 +118,12 @@ func Test_partitioner_HandleInRoundRobin(t *testing.T) {
 }
 
 func Test_partitioner_HandleMaxAttempts(t *testing.T) {
-	p := New(30, 500*time.Millisecond).WithMaxAttempts(3).Build()
+	called := false
+	discardEvent := func() { called = true }
+	p := New(30, 500*time.Millisecond).
+		WithMaxAttempts(3).
+		WithMaxRetryDiscardEvent(discardEvent).
+		Build()
 
 	firstCalled := 0
 	secondExecuted := false
@@ -139,6 +144,41 @@ func Test_partitioner_HandleMaxAttempts(t *testing.T) {
 
 	if firstCalled != 3 {
 		t.Errorf("Expected %d but got %d", 3, firstCalled)
+	}
+
+	if !called {
+		t.Errorf("Expected %t but got %t", true, called)
+	}
+
+	if !secondExecuted {
+		t.Error("Second function should have been executed")
+	}
+}
+
+func Test_partitioner_ForceDiscardOnError(t *testing.T) {
+	p := New(30, 500*time.Millisecond).
+		WithRetryErrorEvent(func(a int, err error) bool { return true }).
+		Build()
+
+	firstCalled := 0
+	secondExecuted := false
+
+	f1 := func() error {
+		firstCalled++
+		return errors.New("Error")
+	}
+
+	f2 := func() error {
+		secondExecuted = true
+		return nil
+	}
+
+	p.HandleInSequence(f1, partition{1})
+	p.HandleInSequence(f2, partition{1})
+	time.Sleep(2 * time.Second)
+
+	if firstCalled != 1 {
+		t.Errorf("Expected %d but got %d", 1, firstCalled)
 	}
 
 	if !secondExecuted {
