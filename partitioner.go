@@ -1,7 +1,6 @@
 package partitioner
 
 import (
-	"log"
 	"sync/atomic"
 	"time"
 )
@@ -17,6 +16,8 @@ type Partition struct {
 	maxWaitingRetry         time.Duration
 	maxAttempts             int
 	maxMessagesPerPartition int
+	retryErrorEvent         func(attempts int, err error) bool
+	maxRetryDiscardEvent    func()
 }
 
 // Partitioner interface to be passed in HandleInSequence
@@ -31,7 +32,15 @@ type PartitionBuilder struct {
 
 //New Partition builder
 func New(partitions int, maxWaitingRetry time.Duration) *PartitionBuilder {
-	return &PartitionBuilder{&Partition{nPart: partitions, maxWaitingRetry: maxWaitingRetry, maxMessagesPerPartition: 10000}}
+	return &PartitionBuilder{
+		&Partition{
+			nPart:                   partitions,
+			maxWaitingRetry:         maxWaitingRetry,
+			maxMessagesPerPartition: 10000,
+			retryErrorEvent:         func(attempts int, err error) bool { return false },
+			maxRetryDiscardEvent:    func() {},
+		},
+	}
 }
 
 //WithMaxAttempts max attempts before discarding a message in error, not assigned or 0 = infinite retry
@@ -43,6 +52,19 @@ func (p *PartitionBuilder) WithMaxAttempts(maxAttempts int) *PartitionBuilder {
 //WithMaxMessagesPerPartition default is 10000, it's the max capacity of the buffer
 func (p *PartitionBuilder) WithMaxMessagesPerPartition(maxMessages int) *PartitionBuilder {
 	p.p.maxMessagesPerPartition = maxMessages
+	return p
+}
+
+//WithRetryErrorEvent pass a function useful to log the errors and eventually discard the event
+//If the high order function will return true, the event will be discarded.
+func (p *PartitionBuilder) WithRetryErrorEvent(fn func(attempts int, err error) bool) *PartitionBuilder {
+	p.p.retryErrorEvent = fn
+	return p
+}
+
+//WithRetryErrorEvent pass a function useful to log the errors
+func (p *PartitionBuilder) WithMaxRetryDiscardEvent(fn func()) *PartitionBuilder {
+	p.p.maxRetryDiscardEvent = fn
 	return p
 }
 
@@ -63,7 +85,9 @@ func (p *PartitionBuilder) Build() *Partition {
 				waiting := 20 * time.Millisecond
 				attempts := 0
 				for err := f(); err != nil; err = f() {
-					log.Printf("Attempt: %d, error: %+v", attempts, err)
+					if p.p.retryErrorEvent(attempts, err) {
+						break
+					}
 					time.Sleep(time.Duration(waiting))
 					if waiting < p.p.maxWaitingRetry {
 						waiting = waiting * 2
@@ -73,6 +97,7 @@ func (p *PartitionBuilder) Build() *Partition {
 
 					attempts++
 					if p.p.maxAttempts > 0 && attempts >= p.p.maxAttempts {
+						p.p.maxRetryDiscardEvent()
 						break
 					}
 				}
