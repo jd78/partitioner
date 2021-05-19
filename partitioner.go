@@ -18,6 +18,7 @@ type Partition struct {
 	maxMessagesPerPartition int
 	retryErrorEvent         func(attempts int, err error) bool
 	maxRetryDiscardEvent    func()
+	messagesInFlight        int64
 }
 
 // Partitioner interface to be passed in HandleInSequence
@@ -86,6 +87,7 @@ func (p *PartitionBuilder) Build() *Partition {
 				attempts := 0
 				for err := f(); err != nil; err = f() {
 					if p.p.retryErrorEvent(attempts, err) {
+						atomic.AddInt64(&p.p.messagesInFlight, -1)
 						break
 					}
 					time.Sleep(time.Duration(waiting))
@@ -98,9 +100,11 @@ func (p *PartitionBuilder) Build() *Partition {
 					attempts++
 					if p.p.maxAttempts > 0 && attempts >= p.p.maxAttempts {
 						p.p.maxRetryDiscardEvent()
+						atomic.AddInt64(&p.p.messagesInFlight, -1)
 						break
 					}
 				}
+				atomic.AddInt64(&p.p.messagesInFlight, -1)
 			}
 		}(i)
 	}
@@ -114,9 +118,18 @@ func (p *PartitionBuilder) Build() *Partition {
 func (p *Partition) HandleInSequence(handler Handler, partitionID Partitioner) {
 	partition := partitionID.GetPartition() % int64(p.nPart)
 	p.partitions[partition] <- handler
+	atomic.AddInt64(&p.messagesInFlight, 1)
 }
 
+// HandleInRoundRobin handles the handler high order function in round robin
+// handler: high order function to execute
 func (p *Partition) HandleInRoundRobin(handler Handler) {
 	partition := atomic.AddInt32(&p.roundRobinKey, 1) % int32(p.nPart)
 	p.partitions[partition] <- handler
+	atomic.AddInt64(&p.messagesInFlight, 1)
+}
+
+// HasMessagesInFlight get the number of messages not yet consumed
+func (p *Partition) GetNumberOfMessagesInFlight() int64 {
+	return p.messagesInFlight
 }

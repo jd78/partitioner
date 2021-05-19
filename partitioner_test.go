@@ -185,3 +185,26 @@ func Test_partitioner_ForceDiscardOnError(t *testing.T) {
 		t.Error("Second function should have been executed")
 	}
 }
+
+func Test_partitioner_MessagesInFlight(t *testing.T) {
+	p := New(30, 5*time.Second).Build()
+
+	f1 := func() error {
+		time.Sleep(1 * time.Second)
+		return nil
+	}
+
+	p.HandleInRoundRobin(f1)
+	p.HandleInRoundRobin(f1)
+	p.HandleInRoundRobin(f1)
+
+	if p.GetNumberOfMessagesInFlight() != 3 {
+		t.Error("Was supposed to have messages in flight")
+	}
+
+	time.Sleep(2 * time.Second)
+
+	if p.GetNumberOfMessagesInFlight() != 0 {
+		t.Error("Was supposed to not have messages in flight")
+	}
+}
