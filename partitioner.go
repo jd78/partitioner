@@ -116,7 +116,13 @@ func (p *PartitionBuilder) Build() *Partition {
 // handler: high order function to execute
 // partitionId: Partitioner interface to get an int64 partition
 func (p *Partition) HandleInSequence(handler Handler, partitionID Partitioner) {
-	partition := partitionID.GetPartition() % int64(p.nPart)
+	partition := func() int64 {
+		p := partitionID.GetPartition() % int64(p.nPart)
+		if p < 0 {
+			return -p
+		}
+		return p
+	}()
 	p.partitions[partition] <- handler
 	atomic.AddInt64(&p.messagesInFlight, 1)
 }
@@ -124,7 +130,13 @@ func (p *Partition) HandleInSequence(handler Handler, partitionID Partitioner) {
 // HandleInRoundRobin handles the handler high order function in round robin
 // handler: high order function to execute
 func (p *Partition) HandleInRoundRobin(handler Handler) {
-	partition := atomic.AddInt32(&p.roundRobinKey, 1) % int32(p.nPart)
+	partition := func() int32 {
+		p := atomic.AddInt32(&p.roundRobinKey, 1) % int32(p.nPart)
+		if p < 0 {
+			return -p
+		}
+		return p
+	}()
 	p.partitions[partition] <- handler
 	atomic.AddInt64(&p.messagesInFlight, 1)
 }
