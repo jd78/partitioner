@@ -141,7 +141,7 @@ func (p *Partition) HandleInRoundRobin(handler Handler) {
 	atomic.AddInt64(&p.messagesInFlight, 1)
 }
 
-// HasMessagesInFlight get the number of messages not yet consumed
+// GetNumberOfMessagesInFlight get the number of messages not yet consumed
 func (p *Partition) GetNumberOfMessagesInFlight() int64 {
-	return p.messagesInFlight
+	return atomic.LoadInt64(&p.messagesInFlight)
 }
