@@ -10,9 +10,9 @@ import (
 type Handler func() error
 
 type Partition struct {
-	nPart                   int
+	nPart                   uint32
 	partitions              []chan Handler
-	roundRobinKey           int32
+	roundRobinKey           uint32
 	maxWaitingRetry         time.Duration
 	maxAttempts             int
 	maxMessagesPerPartition int
@@ -23,7 +23,7 @@ type Partition struct {
 
 // Partitioner interface to be passed in HandleInSequence
 type Partitioner interface {
-	GetPartition() int64
+	GetPartition() uint32
 }
 
 //PartitionBuilder build new partitioner
@@ -32,7 +32,7 @@ type PartitionBuilder struct {
 }
 
 //New Partition builder
-func New(partitions int, maxWaitingRetry time.Duration) *PartitionBuilder {
+func New(partitions uint32, maxWaitingRetry time.Duration) *PartitionBuilder {
 	return &PartitionBuilder{
 		&Partition{
 			nPart:                   partitions,
@@ -73,14 +73,14 @@ func (p *PartitionBuilder) WithMaxRetryDiscardEvent(fn func()) *PartitionBuilder
 func (p *PartitionBuilder) Build() *Partition {
 	npart := p.p.nPart
 	partitions := make([]chan Handler, npart, npart)
-	for i := 0; i < npart; i++ {
+	for i := uint32(0); i < npart; i++ {
 		partitions[i] = make(chan Handler, p.p.maxMessagesPerPartition)
 	}
 
 	p.p.partitions = partitions
 
-	for i := 0; i < npart; i++ {
-		go func(partId int) {
+	for i := uint32(0); i < npart; i++ {
+		go func(partId uint32) {
 			for {
 				f := <-partitions[partId]
 				waiting := 20 * time.Millisecond
@@ -114,15 +114,9 @@ func (p *PartitionBuilder) Build() *Partition {
 
 // HandleInSequence handles the handler high order function in sequence based on the resolved partitionId
 // handler: high order function to execute
-// partitionId: Partitioner interface to get an int64 partition
+// partitionId: Partitioner interface to get an uint32 partition
 func (p *Partition) HandleInSequence(handler Handler, partitionID Partitioner) {
-	partition := func() int64 {
-		p := partitionID.GetPartition() % int64(p.nPart)
-		if p < 0 {
-			return -p
-		}
-		return p
-	}()
+	partition := partitionID.GetPartition() % p.nPart
 	p.partitions[partition] <- handler
 	atomic.AddInt64(&p.messagesInFlight, 1)
 }
@@ -130,13 +124,7 @@ func (p *Partition) HandleInSequence(handler Handler, partitionID Partitioner) {
 // HandleInRoundRobin handles the handler high order function in round robin
 // handler: high order function to execute
 func (p *Partition) HandleInRoundRobin(handler Handler) {
-	partition := func() int32 {
-		p := atomic.AddInt32(&p.roundRobinKey, 1) % int32(p.nPart)
-		if p < 0 {
-			return -p
-		}
-		return p
-	}()
+	partition := atomic.AddUint32(&p.roundRobinKey, 1) % p.nPart
 	p.partitions[partition] <- handler
 	atomic.AddInt64(&p.messagesInFlight, 1)
 }
