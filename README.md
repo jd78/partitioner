@@ -26,21 +26,21 @@ type message2 struct {
 	identifier int
 }
 
-var roundrobin int64 = 0
+var roundrobin uint32
 
 type partition struct {
 	message interface{}
 }
 
-func (p partition) GetPartition() int64 {
+func (p partition) GetPartition() uint32 {
 	switch p.message.(type) {
 	case message1:
-		return int64(p.message.(message1).id)
+		return uint32(p.message.(message1).id)
 	case message2:
-		return int64(p.message.(message2).identifier)
+		return uint32(p.message.(message2).identifier)
 	}
 
-	return atomic.AddInt64(&roundrobin, 1)
+	return atomic.AddUint32(&roundrobin, 1)
 }
 
 func main() {
