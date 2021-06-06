@@ -7,10 +7,10 @@ import (
 )
 
 type partition struct {
-	partition int64
+	partition uint32
 }
 
-func (p partition) GetPartition() int64 {
+func (p partition) GetPartition() uint32 {
 	return p.partition
 }
 
