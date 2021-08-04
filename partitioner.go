@@ -138,8 +138,10 @@ func (p *Partition) HandleInRoundRobin(handler Handler) {
 	atomic.AddInt64(&p.messagesInFlight, 1)
 }
 
-// HandleDebounced debounce the handler high order function in round robin
+// HandleDebounced debounced handler handles messages with the same key within a time window only once,
+// only the last message will processed and the rest will be dropped
 // handler: high order function to execute
+// key: message key
 func (p *Partition) HandleDebounced(handler Handler, key string) {
 	// Backoff if currentInFlight > nPart * maxMessagesPerPartition
 	// this means messages are in error and or buffer is full
