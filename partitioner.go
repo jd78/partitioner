@@ -152,7 +152,6 @@ func (p *Partition) HandleDebounced(handler Handler, key string) {
 	defer p.Unlock()
 	timer, found := p.debounceTimers[key]
 	if found {
-		atomic.AddInt64(&p.messagesInFlight, -1)
 		timer.Stop()
 	}
 
