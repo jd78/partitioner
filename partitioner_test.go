@@ -153,6 +153,10 @@ func Test_partitioner_HandleMaxAttempts(t *testing.T) {
 	if !secondExecuted {
 		t.Error("Second function should have been executed")
 	}
+
+	if p.GetNumberOfMessagesInFlight() != 0 {
+		t.Error("Message in flight should be 0")
+	}
 }
 
 func Test_partitioner_ForceDiscardOnError(t *testing.T) {
@@ -206,5 +210,96 @@ func Test_partitioner_MessagesInFlight(t *testing.T) {
 
 	if p.GetNumberOfMessagesInFlight() != 0 {
 		t.Error("Was supposed to not have messages in flight")
+	}
+}
+
+func Test_partitioner_HandleDebounceBackoff(t *testing.T) {
+	p := New(1, 5*time.Second).
+		WithMaxMessagesPerPartition(1).Build()
+
+	secondExecuted := false
+
+	f1 := func() error {
+		return errors.New("Error")
+	}
+
+	f2 := func() error {
+		secondExecuted = true
+		return nil
+	}
+
+	p.HandleDebounced(f1, "1")
+	time.Sleep(500 * time.Millisecond)
+	go p.HandleDebounced(f2, "2")
+	time.Sleep(500 * time.Millisecond)
+
+	if secondExecuted {
+		t.Error("Second function should not be executed")
+	}
+}
+
+func Test_partitioner_HandleDebounceWaitToExecute(t *testing.T) {
+	p := New(1, 5*time.Second).
+		WithDebounceWindow(1 * time.Minute).Build()
+
+	executed := false
+
+	f1 := func() error {
+		executed = true
+		return nil
+	}
+
+	p.HandleDebounced(f1, "1")
+	time.Sleep(500 * time.Millisecond)
+
+	if executed {
+		t.Error("function should not be executed")
+	}
+}
+
+func Test_partitioner_HandleDebounceExecuted(t *testing.T) {
+	p := New(1, 5*time.Second).Build()
+
+	executed := false
+
+	f1 := func() error {
+		executed = true
+		return nil
+	}
+
+	p.HandleDebounced(f1, "1")
+	time.Sleep(500 * time.Millisecond)
+
+	if !executed {
+		t.Error("function should be executed")
+	}
+}
+
+func Test_partitioner_HandleOverwriteExecution(t *testing.T) {
+	p := New(1, 5*time.Second).Build()
+
+	firstExecuted := false
+	secondExecuted := false
+
+	f1 := func() error {
+		firstExecuted = true
+		return nil
+	}
+
+	f2 := func() error {
+		secondExecuted = true
+		return nil
+	}
+
+	p.HandleDebounced(f1, "1")
+	p.HandleDebounced(f2, "1")
+	time.Sleep(500 * time.Millisecond)
+
+	if firstExecuted {
+		t.Error("first function should not be executed")
+	}
+
+	if !secondExecuted {
+		t.Error("second function should be executed")
 	}
 }

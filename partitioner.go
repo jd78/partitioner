@@ -1,6 +1,7 @@
 package partitioner
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -10,6 +11,7 @@ import (
 type Handler func() error
 
 type Partition struct {
+	sync.Mutex
 	nPart                   uint32
 	partitions              []chan Handler
 	roundRobinKey           uint32
@@ -19,6 +21,8 @@ type Partition struct {
 	retryErrorEvent         func(attempts int, err error) bool
 	maxRetryDiscardEvent    func()
 	messagesInFlight        int64
+	debounceTimers          map[string]*time.Timer
+	debounceWindow          time.Duration
 }
 
 // Partitioner interface to be passed in HandleInSequence
@@ -40,6 +44,8 @@ func New(partitions uint32, maxWaitingRetry time.Duration) *PartitionBuilder {
 			maxMessagesPerPartition: 10000,
 			retryErrorEvent:         func(attempts int, err error) bool { return false },
 			maxRetryDiscardEvent:    func() {},
+			debounceTimers:          make(map[string]*time.Timer),
+			debounceWindow:          100 * time.Millisecond,
 		},
 	}
 }
@@ -69,6 +75,11 @@ func (p *PartitionBuilder) WithMaxRetryDiscardEvent(fn func()) *PartitionBuilder
 	return p
 }
 
+func (p *PartitionBuilder) WithDebounceWindow(d time.Duration) *PartitionBuilder {
+	p.p.debounceWindow = d
+	return p
+}
+
 //Build builds the partitioner
 func (p *PartitionBuilder) Build() *Partition {
 	npart := p.p.nPart
@@ -87,7 +98,6 @@ func (p *PartitionBuilder) Build() *Partition {
 				attempts := 0
 				for err := f(); err != nil; err = f() {
 					if p.p.retryErrorEvent(attempts, err) {
-						atomic.AddInt64(&p.p.messagesInFlight, -1)
 						break
 					}
 					time.Sleep(time.Duration(waiting))
@@ -100,7 +110,6 @@ func (p *PartitionBuilder) Build() *Partition {
 					attempts++
 					if p.p.maxAttempts > 0 && attempts >= p.p.maxAttempts {
 						p.p.maxRetryDiscardEvent()
-						atomic.AddInt64(&p.p.messagesInFlight, -1)
 						break
 					}
 				}
@@ -127,6 +136,34 @@ func (p *Partition) HandleInRoundRobin(handler Handler) {
 	partition := atomic.AddUint32(&p.roundRobinKey, 1) % p.nPart
 	p.partitions[partition] <- handler
 	atomic.AddInt64(&p.messagesInFlight, 1)
+}
+
+// HandleDebounced debounce the handler high order function in round robin
+// handler: high order function to execute
+func (p *Partition) HandleDebounced(handler Handler, key string) {
+	// Backoff if currentInFlight > nPart * maxMessagesPerPartition
+	// this means messages are in error
+	currentInFlight := atomic.LoadInt64(&p.messagesInFlight)
+	for currentInFlight >= int64(p.nPart)*int64(p.maxMessagesPerPartition) {
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	timer, found := p.debounceTimers[key]
+	if found {
+		atomic.AddInt64(&p.messagesInFlight, -1)
+		timer.Stop()
+	}
+
+	newTimer := time.AfterFunc(p.debounceWindow, func() {
+		atomic.AddInt64(&p.messagesInFlight, 1)
+		partition := atomic.AddUint32(&p.roundRobinKey, 1) % p.nPart
+		p.partitions[partition] <- handler
+
+		p.Lock()
+		delete(p.debounceTimers, key)
+		p.Unlock()
+	})
+	p.debounceTimers[key] = newTimer
 }
 
 // GetNumberOfMessagesInFlight get the number of messages not yet consumed
