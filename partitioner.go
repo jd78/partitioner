@@ -145,8 +145,7 @@ func (p *Partition) HandleInRoundRobin(handler Handler) {
 func (p *Partition) HandleDebounced(handler Handler, key string) {
 	// Backoff if currentInFlight > nPart * maxMessagesPerPartition
 	// this means messages are in error and or buffer is full
-	currentInFlight := atomic.LoadInt64(&p.messagesInFlight)
-	for currentInFlight >= int64(p.nPart)*int64(p.maxMessagesPerPartition) {
+	for atomic.LoadInt64(&p.messagesInFlight) >= int64(p.nPart)*int64(p.maxMessagesPerPartition) {
 		time.Sleep(2 * time.Millisecond)
 	}
 
