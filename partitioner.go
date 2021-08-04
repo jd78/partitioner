@@ -75,6 +75,9 @@ func (p *PartitionBuilder) WithMaxRetryDiscardEvent(fn func()) *PartitionBuilder
 	return p
 }
 
+//WithDebounceWindow pass a duration window that will be used in HandleDebounced
+//this is the time window where messages will be dropped and only the last one executed
+//default: 100 Milliseconds
 func (p *PartitionBuilder) WithDebounceWindow(d time.Duration) *PartitionBuilder {
 	p.p.debounceWindow = d
 	return p
