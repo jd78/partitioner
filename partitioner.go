@@ -148,6 +148,8 @@ func (p *Partition) HandleDebounced(handler Handler, key string) {
 		time.Sleep(2 * time.Millisecond)
 	}
 
+	p.Lock()
+	defer p.Unlock()
 	timer, found := p.debounceTimers[key]
 	if found {
 		atomic.AddInt64(&p.messagesInFlight, -1)
@@ -164,9 +166,7 @@ func (p *Partition) HandleDebounced(handler Handler, key string) {
 		p.Unlock()
 	})
 
-	p.Lock()
 	p.debounceTimers[key] = newTimer
-	p.Unlock()
 }
 
 // GetNumberOfMessagesInFlight get the number of messages not yet consumed
