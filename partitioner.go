@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-// Handler high order function to be executed
-// nit err for completed, otherwise infinite retry
-type Handler func() error
-
 type Partition struct {
 	sync.Mutex
 	nPart                   uint32
