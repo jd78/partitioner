@@ -125,9 +125,15 @@ func (p *RoundRobinHandler) HandleInRoundRobin(handler Handler) {
 // key: message key
 func (p *RoundRobinHandler) HandleDebounced(handler Handler, key string) {
 	// Backoff if currentInFlight > nPart * maxMessagesPerPartition
-	// this means messages are in error and or buffer is full
+	// this means messages are in error and/or buffer is full
+	buffer := func() int64 {
+		if p.buffer > 0 {
+			return int64(p.buffer)
+		}
+		return int64(p.nPart)
+	}()
 	if p.buffer > 0 {
-		for atomic.LoadInt64(&p.messagesInFlight) >= int64(p.nPart)*int64(p.buffer) {
+		for atomic.LoadInt64(&p.messagesInFlight) >= buffer {
 			time.Sleep(2 * time.Millisecond)
 		}
 	}
