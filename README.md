@@ -1,6 +1,6 @@
 # Partitioner
 
-[![Build Status](https://travis-ci.com/jd78/partitioner.svg?branch=master)](https://travis-ci.com/jd78/partitioner)
+[![Build Status](https://travis-ci.com/jd78/partitioner.svg?branch=master)](https://app.travis-ci.com/github/jd78/partitioner)
 
 Partitioner executes high order functions in sequence given a partition key. Functions with the same partition key will be executed only by one partition.
 
