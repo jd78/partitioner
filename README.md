@@ -5,7 +5,7 @@
 Partitioner executes high order functions in sequence given a partition key. Functions with the same partition key will be executed only by one partition. 
 You can also opt-in a round robin executor and even using the more optimized RoundRobinHandler.
 
-A debounced consumer is also available to delay the execution of a task for a given message key.
+A debounced consumer is also available to delay the execution of a task for a given message key and deduplicate messages.
 
 ## Constructors
 
@@ -35,10 +35,10 @@ WithMaxRetryDiscardEvent(fn func())
 //default: 100 Milliseconds
 WithDebounceWindow(d time.Duration)
 
-//WithDebounceDoNotResetTimer if enabled will execute the first received message when the time window expires.
-//New messages are going to be discarded until the time window expires.
-//default: false
-WithDebounceDoNotResetTimer()
+// WithDebounceResetTimer if disabled will execute the first received message for a given key when the time window expires.
+// New messages for the same key are going to be discarded during this time.
+//default: true
+WithDebounceResetTimer(resetTimer bool)
 ```
 
 ## Examples 
@@ -197,7 +197,7 @@ type message1 struct {
 func main() {
 	p := partitioner.NewRoundRobinHandler(30, 5*time.Second).
         WithDebounceWindow(500 * time.Millisecond).
-        WithDebounceDoNotResetTimer().
+        WithDebounceResetTimer(false).
         Build()
 
 	for i := 0; i < 2; i++ {

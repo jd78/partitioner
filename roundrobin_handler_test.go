@@ -199,7 +199,7 @@ func Test_roundrobin_handler_HandleDebounceDoNotExecuteIfNewMessagesAreComing(t 
 
 func Test_roundrobin_handler_HandleDebounceDoNotResetTimer(t *testing.T) {
 	p := NewRoundRobinHandler(1, 5*time.Second).
-		WithDebounceDoNotResetTimer().
+		WithDebounceResetTimer(false).
 		WithDebounceWindow(100 * time.Millisecond).Build()
 
 	executed := false
