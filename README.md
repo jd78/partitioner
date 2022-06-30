@@ -41,7 +41,7 @@ WithDebounceWindow(d time.Duration)
 WithDebounceDoNotResetTimer()
 ```
 
-#### Examples 
+## Examples 
 
 ```go
 //Blocking Partition example
