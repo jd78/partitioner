@@ -329,7 +329,7 @@ func Test_partitioner_handler_HandleDebounceDoNotExecuteIfNewMessagesAreComing(t
 
 func Test_partitioner_handler_HandleDebounceDoNotResetTimer(t *testing.T) {
 	p := New(1, 5*time.Second).
-		WithDebounceDoNotResetTimer().
+		WithDebounceResetTimer(false).
 		WithDebounceWindow(100 * time.Millisecond).Build()
 
 	executed := false

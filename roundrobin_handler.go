@@ -8,17 +8,17 @@ import (
 
 type RoundRobinHandler struct {
 	sync.Mutex
-	nPart                   uint32
-	messageChannel          chan Handler
-	maxWaitingRetry         time.Duration
-	maxAttempts             int
-	buffer                  int
-	retryErrorEvent         func(attempts int, err error) bool
-	maxRetryDiscardEvent    func()
-	messagesInFlight        int64
-	debounceTimers          map[string]*time.Timer
-	debounceWindow          time.Duration
-	debounceDoNotResetTimer bool
+	nPart                uint32
+	messageChannel       chan Handler
+	maxWaitingRetry      time.Duration
+	maxAttempts          int
+	buffer               int
+	retryErrorEvent      func(attempts int, err error) bool
+	maxRetryDiscardEvent func()
+	messagesInFlight     int64
+	debounceTimers       map[string]*time.Timer
+	debounceWindow       time.Duration
+	debounceResetTimer   bool
 }
 
 //PartitionBuilder build new partitioner
@@ -30,13 +30,13 @@ type RoundRobinHandlerBuilder struct {
 func NewRoundRobinHandler(partitions uint32, maxWaitingRetry time.Duration) *RoundRobinHandlerBuilder {
 	return &RoundRobinHandlerBuilder{
 		&RoundRobinHandler{
-			nPart:                   partitions,
-			maxWaitingRetry:         maxWaitingRetry,
-			retryErrorEvent:         func(attempts int, err error) bool { return false },
-			maxRetryDiscardEvent:    func() {},
-			debounceTimers:          make(map[string]*time.Timer),
-			debounceWindow:          100 * time.Millisecond,
-			debounceDoNotResetTimer: false,
+			nPart:                partitions,
+			maxWaitingRetry:      maxWaitingRetry,
+			retryErrorEvent:      func(attempts int, err error) bool { return false },
+			maxRetryDiscardEvent: func() {},
+			debounceTimers:       make(map[string]*time.Timer),
+			debounceWindow:       100 * time.Millisecond,
+			debounceResetTimer:   true,
 		},
 	}
 }
@@ -74,11 +74,11 @@ func (p *RoundRobinHandlerBuilder) WithDebounceWindow(d time.Duration) *RoundRob
 	return p
 }
 
-//WithDebounceDoNotResetTimer if enabled will execute the first received message when the time window expires.
-//New messages are going to be discarded until the time window expires.
-//default: false
-func (p *RoundRobinHandlerBuilder) WithDebounceDoNotResetTimer() *RoundRobinHandlerBuilder {
-	p.roundRobinHandler.debounceDoNotResetTimer = true
+// WithDebounceResetTimer if disabled will execute the first received message for a given key when the time window expires.
+// New messages for the same key are going to be discarded during this time.
+//default: true
+func (p *RoundRobinHandlerBuilder) WithDebounceResetTimer(resetTimer bool) *RoundRobinHandlerBuilder {
+	p.roundRobinHandler.debounceResetTimer = resetTimer
 	return p
 }
 
@@ -152,7 +152,7 @@ func (p *RoundRobinHandler) HandleDebounced(handler Handler, key string) {
 	defer p.Unlock()
 	timer, found := p.debounceTimers[key]
 	if found {
-		if p.debounceDoNotResetTimer {
+		if !p.debounceResetTimer {
 			return
 		}
 		timer.Stop()

@@ -19,7 +19,7 @@ type Partition struct {
 	messagesInFlight        int64
 	debounceTimers          map[string]*time.Timer
 	debounceWindow          time.Duration
-	debounceDoNotResetTimer bool
+	debounceResetTimer      bool
 }
 
 // Partitioner interface to be passed in HandleInSequence
@@ -43,7 +43,7 @@ func New(partitions uint32, maxWaitingRetry time.Duration) *PartitionBuilder {
 			maxRetryDiscardEvent:    func() {},
 			debounceTimers:          make(map[string]*time.Timer),
 			debounceWindow:          100 * time.Millisecond,
-			debounceDoNotResetTimer: false,
+			debounceResetTimer:      true,
 		},
 	}
 }
@@ -81,11 +81,11 @@ func (p *PartitionBuilder) WithDebounceWindow(d time.Duration) *PartitionBuilder
 	return p
 }
 
-// WithDebounceDoNotResetTimer if enabled will execute the first received message when the time window expires.
-// New messages are going to be discarded until the time window expires.
-//default: false
-func (p *PartitionBuilder) WithDebounceDoNotResetTimer() *PartitionBuilder {
-	p.partition.debounceDoNotResetTimer = true
+// WithDebounceResetTimer if disabled will execute the first received message for a given key when the time window expires.
+// New messages for the same key are going to be discarded during this time.
+//default: true
+func (p *PartitionBuilder) WithDebounceResetTimer(resetTimer bool) *PartitionBuilder {
+	p.partition.debounceResetTimer = resetTimer
 	return p
 }
 
@@ -162,7 +162,7 @@ func (p *Partition) HandleDebounced(handler Handler, key string) {
 	defer p.Unlock()
 	timer, found := p.debounceTimers[key]
 	if found {
-		if p.debounceDoNotResetTimer {
+		if !p.debounceResetTimer {
 			return
 		}
 		timer.Stop()
