@@ -303,3 +303,50 @@ func Test_partitioner_HandleOverwriteExecution(t *testing.T) {
 		t.Error("second function should be executed")
 	}
 }
+
+func Test_partitioner_handler_HandleDebounceDoNotExecuteIfNewMessagesAreComing(t *testing.T) {
+	p := New(1, 5*time.Second).
+		WithDebounceWindow(100 * time.Millisecond).Build()
+
+	executed := false
+
+	f1 := func() error {
+		executed = true
+		return nil
+	}
+
+	go func() {
+		for {
+			p.HandleDebounced(f1, "1")
+		}
+	}()
+	time.Sleep(500 * time.Millisecond)
+
+	if executed {
+		t.Error("function should not be executed")
+	}
+}
+
+func Test_partitioner_handler_HandleDebounceDoNotResetTimer(t *testing.T) {
+	p := New(1, 5*time.Second).
+		WithDebounceDoNotResetTimer().
+		WithDebounceWindow(100 * time.Millisecond).Build()
+
+	executed := false
+
+	f1 := func() error {
+		executed = true
+		return nil
+	}
+
+	go func() {
+		for {
+			p.HandleDebounced(f1, "1")
+		}
+	}()
+	time.Sleep(500 * time.Millisecond)
+
+	if !executed {
+		t.Error("function should be executed")
+	}
+}

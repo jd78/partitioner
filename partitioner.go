@@ -19,6 +19,7 @@ type Partition struct {
 	messagesInFlight        int64
 	debounceTimers          map[string]*time.Timer
 	debounceWindow          time.Duration
+	debounceDoNotResetTimer bool
 }
 
 // Partitioner interface to be passed in HandleInSequence
@@ -28,7 +29,7 @@ type Partitioner interface {
 
 //PartitionBuilder build new partitioner
 type PartitionBuilder struct {
-	p *Partition
+	partition *Partition
 }
 
 //New Partition builder
@@ -42,32 +43,33 @@ func New(partitions uint32, maxWaitingRetry time.Duration) *PartitionBuilder {
 			maxRetryDiscardEvent:    func() {},
 			debounceTimers:          make(map[string]*time.Timer),
 			debounceWindow:          100 * time.Millisecond,
+			debounceDoNotResetTimer: false,
 		},
 	}
 }
 
 //WithMaxAttempts max attempts before discarding a message in error, not assigned or 0 = infinite retry
 func (p *PartitionBuilder) WithMaxAttempts(maxAttempts int) *PartitionBuilder {
-	p.p.maxAttempts = maxAttempts
+	p.partition.maxAttempts = maxAttempts
 	return p
 }
 
 //WithMaxMessagesPerPartition default is 10000, it's the max capacity of the buffer
 func (p *PartitionBuilder) WithMaxMessagesPerPartition(maxMessages int) *PartitionBuilder {
-	p.p.maxMessagesPerPartition = maxMessages
+	p.partition.maxMessagesPerPartition = maxMessages
 	return p
 }
 
 //WithRetryErrorEvent pass a function useful to log the errors and eventually discard the event
 //If the high order function will return true, the event will be discarded.
 func (p *PartitionBuilder) WithRetryErrorEvent(fn func(attempts int, err error) bool) *PartitionBuilder {
-	p.p.retryErrorEvent = fn
+	p.partition.retryErrorEvent = fn
 	return p
 }
 
 //WithRetryErrorEvent pass a function useful to log the errors
 func (p *PartitionBuilder) WithMaxRetryDiscardEvent(fn func()) *PartitionBuilder {
-	p.p.maxRetryDiscardEvent = fn
+	p.partition.maxRetryDiscardEvent = fn
 	return p
 }
 
@@ -75,19 +77,27 @@ func (p *PartitionBuilder) WithMaxRetryDiscardEvent(fn func()) *PartitionBuilder
 //this is the time window where messages will be dropped and only the last one executed
 //default: 100 Milliseconds
 func (p *PartitionBuilder) WithDebounceWindow(d time.Duration) *PartitionBuilder {
-	p.p.debounceWindow = d
+	p.partition.debounceWindow = d
+	return p
+}
+
+// WithDebounceDoNotResetTimer if enabled will execute the first received message when the time window expires.
+// New messages are going to be discarded until the time window expires.
+//default: false
+func (p *PartitionBuilder) WithDebounceDoNotResetTimer() *PartitionBuilder {
+	p.partition.debounceDoNotResetTimer = true
 	return p
 }
 
 //Build builds the partitioner
 func (p *PartitionBuilder) Build() *Partition {
-	npart := p.p.nPart
+	npart := p.partition.nPart
 	partitions := make([]chan Handler, npart, npart)
 	for i := uint32(0); i < npart; i++ {
-		partitions[i] = make(chan Handler, p.p.maxMessagesPerPartition)
+		partitions[i] = make(chan Handler, p.partition.maxMessagesPerPartition)
 	}
 
-	p.p.partitions = partitions
+	p.partition.partitions = partitions
 
 	for i := uint32(0); i < npart; i++ {
 		go func(partId uint32) {
@@ -96,28 +106,28 @@ func (p *PartitionBuilder) Build() *Partition {
 				waiting := 20 * time.Millisecond
 				attempts := 0
 				for err := f(); err != nil; err = f() {
-					if p.p.retryErrorEvent(attempts, err) {
+					if p.partition.retryErrorEvent(attempts, err) {
 						break
 					}
 					time.Sleep(time.Duration(waiting))
-					if waiting < p.p.maxWaitingRetry {
+					if waiting < p.partition.maxWaitingRetry {
 						waiting = waiting * 2
 					} else {
-						waiting = p.p.maxWaitingRetry
+						waiting = p.partition.maxWaitingRetry
 					}
 
 					attempts++
-					if p.p.maxAttempts > 0 && attempts >= p.p.maxAttempts {
-						p.p.maxRetryDiscardEvent()
+					if p.partition.maxAttempts > 0 && attempts >= p.partition.maxAttempts {
+						p.partition.maxRetryDiscardEvent()
 						break
 					}
 				}
-				atomic.AddInt64(&p.p.messagesInFlight, -1)
+				atomic.AddInt64(&p.partition.messagesInFlight, -1)
 			}
 		}(i)
 	}
 
-	return p.p
+	return p.partition
 }
 
 // HandleInSequence handles the handler high order function in sequence based on the resolved partitionId
@@ -152,6 +162,9 @@ func (p *Partition) HandleDebounced(handler Handler, key string) {
 	defer p.Unlock()
 	timer, found := p.debounceTimers[key]
 	if found {
+		if p.debounceDoNotResetTimer {
+			return
+		}
 		timer.Stop()
 	}
 

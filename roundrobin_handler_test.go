@@ -156,7 +156,7 @@ func Test_roundrobin_handler_HandleDebounceBackoff(t *testing.T) {
 }
 
 func Test_roundrobin_handler_HandleDebounceWaitToExecute(t *testing.T) {
-	p := New(1, 5*time.Second).
+	p := NewRoundRobinHandler(1, 5*time.Second).
 		WithDebounceWindow(1 * time.Minute).Build()
 
 	executed := false
@@ -171,6 +171,53 @@ func Test_roundrobin_handler_HandleDebounceWaitToExecute(t *testing.T) {
 
 	if executed {
 		t.Error("function should not be executed")
+	}
+}
+
+func Test_roundrobin_handler_HandleDebounceDoNotExecuteIfNewMessagesAreComing(t *testing.T) {
+	p := NewRoundRobinHandler(1, 5*time.Second).
+		WithDebounceWindow(100 * time.Millisecond).Build()
+
+	executed := false
+
+	f1 := func() error {
+		executed = true
+		return nil
+	}
+
+	go func() {
+		for {
+			p.HandleDebounced(f1, "1")
+		}
+	}()
+	time.Sleep(500 * time.Millisecond)
+
+	if executed {
+		t.Error("function should not be executed")
+	}
+}
+
+func Test_roundrobin_handler_HandleDebounceDoNotResetTimer(t *testing.T) {
+	p := NewRoundRobinHandler(1, 5*time.Second).
+		WithDebounceDoNotResetTimer().
+		WithDebounceWindow(100 * time.Millisecond).Build()
+
+	executed := false
+
+	f1 := func() error {
+		executed = true
+		return nil
+	}
+
+	go func() {
+		for {
+			p.HandleDebounced(f1, "1")
+		}
+	}()
+	time.Sleep(500 * time.Millisecond)
+
+	if !executed {
+		t.Error("function should be executed")
 	}
 }
 
@@ -193,7 +240,7 @@ func Test_roundrobin_handler_HandleDebounceExecuted(t *testing.T) {
 }
 
 func Test_roundrobin_handler_HandleOverwriteExecution(t *testing.T) {
-	p := New(1, 5*time.Second).Build()
+	p := NewRoundRobinHandler(1, 5*time.Second).Build()
 
 	firstExecuted := false
 	secondExecuted := false
