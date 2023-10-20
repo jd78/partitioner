@@ -21,12 +21,12 @@ type RoundRobinHandler struct {
 	debounceResetTimer   bool
 }
 
-//PartitionBuilder build new partitioner
+// PartitionBuilder build new partitioner
 type RoundRobinHandlerBuilder struct {
 	roundRobinHandler *RoundRobinHandler
 }
 
-//New Partition builder
+// NewRoundRobinHandler Partition builder
 func NewRoundRobinHandler(partitions uint32, maxWaitingRetry time.Duration) *RoundRobinHandlerBuilder {
 	return &RoundRobinHandlerBuilder{
 		&RoundRobinHandler{
@@ -41,34 +41,49 @@ func NewRoundRobinHandler(partitions uint32, maxWaitingRetry time.Duration) *Rou
 	}
 }
 
-//WithMaxAttempts max attempts before discarding a message in error, not assigned or 0 = infinite retry
+// NewSingleThreadHandler Partition builder
+func NewSingleThreadHandler(maxWaitingRetry time.Duration) *RoundRobinHandlerBuilder {
+	return &RoundRobinHandlerBuilder{
+		&RoundRobinHandler{
+			nPart:                1,
+			maxWaitingRetry:      maxWaitingRetry,
+			retryErrorEvent:      func(attempts int, err error) bool { return false },
+			maxRetryDiscardEvent: func() {},
+			debounceTimers:       make(map[string]*time.Timer),
+			debounceWindow:       100 * time.Millisecond,
+			debounceResetTimer:   true,
+		},
+	}
+}
+
+// WithMaxAttempts max attempts before discarding a message in error, not assigned or 0 = infinite retry
 func (p *RoundRobinHandlerBuilder) WithMaxAttempts(maxAttempts int) *RoundRobinHandlerBuilder {
 	p.roundRobinHandler.maxAttempts = maxAttempts
 	return p
 }
 
-//WithBuffer It's the capacity of the buffer. default is 0, meaning no buffered channel will be used.
+// WithBuffer It's the capacity of the buffer. default is 0, meaning no buffered channel will be used.
 func (p *RoundRobinHandlerBuilder) WithBuffer(buffer int) *RoundRobinHandlerBuilder {
 	p.roundRobinHandler.buffer = buffer
 	return p
 }
 
-//WithRetryErrorEvent pass a function useful to log the errors and eventually discard the event
-//If the high order function will return true, the event will be discarded.
+// WithRetryErrorEvent pass a function useful to log the errors and eventually discard the event
+// If the high order function will return true, the event will be discarded.
 func (p *RoundRobinHandlerBuilder) WithRetryErrorEvent(fn func(attempts int, err error) bool) *RoundRobinHandlerBuilder {
 	p.roundRobinHandler.retryErrorEvent = fn
 	return p
 }
 
-//WithRetryErrorEvent pass a function useful to log the errors
+// WithRetryErrorEvent pass a function useful to log the errors
 func (p *RoundRobinHandlerBuilder) WithMaxRetryDiscardEvent(fn func()) *RoundRobinHandlerBuilder {
 	p.roundRobinHandler.maxRetryDiscardEvent = fn
 	return p
 }
 
-//WithDebounceWindow pass a duration window that will be used in HandleDebounced
-//this is the time window where messages will be dropped and only the last one executed
-//default: 100 Milliseconds
+// WithDebounceWindow pass a duration window that will be used in HandleDebounced
+// this is the time window where messages will be dropped and only the last one executed
+// default: 100 Milliseconds
 func (p *RoundRobinHandlerBuilder) WithDebounceWindow(d time.Duration) *RoundRobinHandlerBuilder {
 	p.roundRobinHandler.debounceWindow = d
 	return p
@@ -76,13 +91,13 @@ func (p *RoundRobinHandlerBuilder) WithDebounceWindow(d time.Duration) *RoundRob
 
 // WithDebounceResetTimer if disabled will execute the first received message for a given key when the time window expires.
 // New messages for the same key are going to be discarded during this time.
-//default: true
+// default: true
 func (p *RoundRobinHandlerBuilder) WithDebounceResetTimer(resetTimer bool) *RoundRobinHandlerBuilder {
 	p.roundRobinHandler.debounceResetTimer = resetTimer
 	return p
 }
 
-//Build builds the partitioner
+// Build builds the partitioner
 func (p *RoundRobinHandlerBuilder) Build() *RoundRobinHandler {
 	npart := p.roundRobinHandler.nPart
 	p.roundRobinHandler.messageChannel = func() chan Handler {
