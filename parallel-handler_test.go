@@ -23,8 +23,8 @@ func Test_roundrobin_handler_HandleInRoundRobin(t *testing.T) {
 		return nil
 	}
 
-	p.HandleInRoundRobin(f1)
-	p.HandleInRoundRobin(f2)
+	p.Handle(f1)
+	p.Handle(f2)
 	time.Sleep(1 * time.Second)
 
 	if !firstExecuted || !secondExecuted {
@@ -54,8 +54,8 @@ func Test_roundrobin_handler_HandleMaxAttempts(t *testing.T) {
 		return nil
 	}
 
-	p.HandleInRoundRobin(f1)
-	p.HandleInRoundRobin(f2)
+	p.Handle(f1)
+	p.Handle(f2)
 	time.Sleep(2 * time.Second)
 
 	if firstCalled != 3 {
@@ -94,8 +94,8 @@ func Test_roundrobin_handler_ForceDiscardOnError(t *testing.T) {
 		return nil
 	}
 
-	p.HandleInRoundRobin(f1)
-	p.HandleInRoundRobin(f2)
+	p.Handle(f1)
+	p.Handle(f2)
 	time.Sleep(2 * time.Second)
 
 	if firstCalled != 1 {
@@ -115,9 +115,9 @@ func Test_roundrobin_handler_MessagesInFlight(t *testing.T) {
 		return nil
 	}
 
-	p.HandleInRoundRobin(f1)
-	p.HandleInRoundRobin(f1)
-	p.HandleInRoundRobin(f1)
+	p.Handle(f1)
+	p.Handle(f1)
+	p.Handle(f1)
 
 	if p.GetNumberOfMessagesInFlight() != 3 {
 		t.Error("Was supposed to have messages in flight")

@@ -13,8 +13,8 @@ type RoundRobinHandler struct {
 	maxWaitingRetry      time.Duration
 	maxAttempts          int
 	buffer               int
-	retryErrorEvent      func(attempts int, err error) bool
-	maxRetryDiscardEvent func()
+	retryErrorEvent      retryErrorEvent
+	maxRetryDiscardEvent maxRetryDiscardEvent
 	messagesInFlight     int64
 	debounceTimers       map[string]*time.Timer
 	debounceWindow       time.Duration
@@ -43,17 +43,7 @@ func NewRoundRobinHandler(partitions uint32, maxWaitingRetry time.Duration) *Rou
 
 // NewSingleThreadHandler Partition builder
 func NewSingleThreadHandler(maxWaitingRetry time.Duration) *RoundRobinHandlerBuilder {
-	return &RoundRobinHandlerBuilder{
-		&RoundRobinHandler{
-			nPart:                1,
-			maxWaitingRetry:      maxWaitingRetry,
-			retryErrorEvent:      func(attempts int, err error) bool { return false },
-			maxRetryDiscardEvent: func() {},
-			debounceTimers:       make(map[string]*time.Timer),
-			debounceWindow:       100 * time.Millisecond,
-			debounceResetTimer:   true,
-		},
-	}
+	return NewRoundRobinHandler(1, maxWaitingRetry)
 }
 
 // WithMaxAttempts max attempts before discarding a message in error, not assigned or 0 = infinite retry
@@ -110,26 +100,8 @@ func (p *RoundRobinHandlerBuilder) Build() *RoundRobinHandler {
 	for i := uint32(0); i < npart; i++ {
 		go func() {
 			for f := range p.roundRobinHandler.messageChannel {
-				waiting := 20 * time.Millisecond
-				attempts := 0
-				for err := f(); err != nil; err = f() {
-					if p.roundRobinHandler.retryErrorEvent(attempts, err) {
-						break
-					}
-					time.Sleep(time.Duration(waiting))
-					if waiting < p.roundRobinHandler.maxWaitingRetry {
-						waiting = waiting * 2
-					} else {
-						waiting = p.roundRobinHandler.maxWaitingRetry
-					}
-
-					attempts++
-					if p.roundRobinHandler.maxAttempts > 0 && attempts >= p.roundRobinHandler.maxAttempts {
-						p.roundRobinHandler.maxRetryDiscardEvent()
-						break
-					}
-				}
-				atomic.AddInt64(&p.roundRobinHandler.messagesInFlight, -1)
+				retry(f, p.roundRobinHandler.retryErrorEvent, p.roundRobinHandler.maxWaitingRetry, p.roundRobinHandler.maxAttempts,
+					p.roundRobinHandler.maxRetryDiscardEvent, func() { atomic.AddInt64(&p.roundRobinHandler.messagesInFlight, -1) })
 			}
 		}()
 	}
@@ -139,7 +111,7 @@ func (p *RoundRobinHandlerBuilder) Build() *RoundRobinHandler {
 
 // HandleInRoundRobin handles the handler high order function in round robin
 // handler: high order function to execute
-func (p *RoundRobinHandler) HandleInRoundRobin(handler Handler) {
+func (p *RoundRobinHandler) Handle(handler Handler) {
 	p.messageChannel <- handler
 	atomic.AddInt64(&p.messagesInFlight, 1)
 }

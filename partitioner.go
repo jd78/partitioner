@@ -14,8 +14,8 @@ type Partition struct {
 	maxWaitingRetry         time.Duration
 	maxAttempts             int
 	maxMessagesPerPartition int
-	retryErrorEvent         func(attempts int, err error) bool
-	maxRetryDiscardEvent    func()
+	retryErrorEvent         retryErrorEvent
+	maxRetryDiscardEvent    maxRetryDiscardEvent
 	messagesInFlight        int64
 	debounceTimers          map[string]*time.Timer
 	debounceWindow          time.Duration
@@ -27,12 +27,12 @@ type Partitioner interface {
 	GetPartition() uint32
 }
 
-//PartitionBuilder build new partitioner
+// PartitionBuilder build new partitioner
 type PartitionBuilder struct {
 	partition *Partition
 }
 
-//New Partition builder
+// New Partition builder
 func New(partitions uint32, maxWaitingRetry time.Duration) *PartitionBuilder {
 	return &PartitionBuilder{
 		&Partition{
@@ -48,34 +48,34 @@ func New(partitions uint32, maxWaitingRetry time.Duration) *PartitionBuilder {
 	}
 }
 
-//WithMaxAttempts max attempts before discarding a message in error, not assigned or 0 = infinite retry
+// WithMaxAttempts max attempts before discarding a message in error, not assigned or 0 = infinite retry
 func (p *PartitionBuilder) WithMaxAttempts(maxAttempts int) *PartitionBuilder {
 	p.partition.maxAttempts = maxAttempts
 	return p
 }
 
-//WithMaxMessagesPerPartition default is 10000, it's the max capacity of the buffer
+// WithMaxMessagesPerPartition default is 10000, it's the max capacity of the buffer
 func (p *PartitionBuilder) WithMaxMessagesPerPartition(maxMessages int) *PartitionBuilder {
 	p.partition.maxMessagesPerPartition = maxMessages
 	return p
 }
 
-//WithRetryErrorEvent pass a function useful to log the errors and eventually discard the event
-//If the high order function will return true, the event will be discarded.
+// WithRetryErrorEvent pass a function useful to log the errors and eventually discard the event
+// If the high order function will return true, the event will be discarded.
 func (p *PartitionBuilder) WithRetryErrorEvent(fn func(attempts int, err error) bool) *PartitionBuilder {
 	p.partition.retryErrorEvent = fn
 	return p
 }
 
-//WithRetryErrorEvent pass a function useful to log the errors
+// WithRetryErrorEvent pass a function useful to log the errors
 func (p *PartitionBuilder) WithMaxRetryDiscardEvent(fn func()) *PartitionBuilder {
 	p.partition.maxRetryDiscardEvent = fn
 	return p
 }
 
-//WithDebounceWindow pass a duration window that will be used in HandleDebounced
-//this is the time window where messages will be dropped and only the last one executed
-//default: 100 Milliseconds
+// WithDebounceWindow pass a duration window that will be used in HandleDebounced
+// this is the time window where messages will be dropped and only the last one executed
+// default: 100 Milliseconds
 func (p *PartitionBuilder) WithDebounceWindow(d time.Duration) *PartitionBuilder {
 	p.partition.debounceWindow = d
 	return p
@@ -83,13 +83,13 @@ func (p *PartitionBuilder) WithDebounceWindow(d time.Duration) *PartitionBuilder
 
 // WithDebounceResetTimer if disabled will execute the first received message for a given key when the time window expires.
 // New messages for the same key are going to be discarded during this time.
-//default: true
+// default: true
 func (p *PartitionBuilder) WithDebounceResetTimer(resetTimer bool) *PartitionBuilder {
 	p.partition.debounceResetTimer = resetTimer
 	return p
 }
 
-//Build builds the partitioner
+// Build builds the partitioner
 func (p *PartitionBuilder) Build() *Partition {
 	npart := p.partition.nPart
 	partitions := make([]chan Handler, npart, npart)
@@ -103,26 +103,8 @@ func (p *PartitionBuilder) Build() *Partition {
 		go func(partId uint32) {
 			for {
 				f := <-partitions[partId]
-				waiting := 20 * time.Millisecond
-				attempts := 0
-				for err := f(); err != nil; err = f() {
-					if p.partition.retryErrorEvent(attempts, err) {
-						break
-					}
-					time.Sleep(time.Duration(waiting))
-					if waiting < p.partition.maxWaitingRetry {
-						waiting = waiting * 2
-					} else {
-						waiting = p.partition.maxWaitingRetry
-					}
-
-					attempts++
-					if p.partition.maxAttempts > 0 && attempts >= p.partition.maxAttempts {
-						p.partition.maxRetryDiscardEvent()
-						break
-					}
-				}
-				atomic.AddInt64(&p.partition.messagesInFlight, -1)
+				retry(f, p.partition.retryErrorEvent, p.partition.maxWaitingRetry, p.partition.maxAttempts,
+					p.partition.maxRetryDiscardEvent, func() { atomic.AddInt64(&p.partition.messagesInFlight, -1) })
 			}
 		}(i)
 	}
