@@ -1,7 +1,5 @@
 # Partitioner
 
-[![Build Status](https://travis-ci.com/jd78/partitioner.svg?branch=master)](https://app.travis-ci.com/github/jd78/partitioner)
-
 Partitioner executes high order functions in sequence given a partition key. Functions with the same partition key will be executed only by one partition. 
 You can also opt-in a round robin executor and even using the more optimized RoundRobinHandler.
 
@@ -10,8 +8,11 @@ A debounced consumer is also available to delay the execution of a task for a gi
 ## Constructors
 
 ```go
+//supports handle in sequence, round robin and debounced
 New(partitions uint32, maxWaitingRetry time.Duration)
-NewRoundRobinHandler(partitions uint32, maxWaitingRetry time.Duration) // improved round robin handler
+//if you are consuming only in round robin this is a better option
+NewRoundRobinHandler(partitions uint32, maxWaitingRetry time.Duration)
+NewSingleThreadHandler(maxWaitingRetry time.Duration)
 ```
 
 ## Options
