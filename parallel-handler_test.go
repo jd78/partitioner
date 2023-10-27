@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_roundrobin_handler_HandleInRoundRobin(t *testing.T) {
@@ -27,9 +29,8 @@ func Test_roundrobin_handler_HandleInRoundRobin(t *testing.T) {
 	p.Handle(f2)
 	time.Sleep(1 * time.Second)
 
-	if !firstExecuted || !secondExecuted {
-		t.Error("Functions not executed in Round Robin")
-	}
+	assert.True(t, firstExecuted)
+	assert.True(t, secondExecuted)
 }
 
 func Test_roundrobin_handler_HandleMaxAttempts(t *testing.T) {
@@ -58,21 +59,10 @@ func Test_roundrobin_handler_HandleMaxAttempts(t *testing.T) {
 	p.Handle(f2)
 	time.Sleep(2 * time.Second)
 
-	if firstCalled != 3 {
-		t.Errorf("Expected %d but got %d", 3, firstCalled)
-	}
-
-	if !called {
-		t.Errorf("Expected %t but got %t", true, called)
-	}
-
-	if !secondExecuted {
-		t.Error("Second function should have been executed")
-	}
-
-	if p.GetNumberOfMessagesInFlight() != 0 {
-		t.Error("Message in flight should be 0")
-	}
+	assert.Equal(t, 3, firstCalled)
+	assert.True(t, called)
+	assert.True(t, secondExecuted)
+	assert.Equal(t, int64(0), p.GetNumberOfMessagesInFlight())
 }
 
 func Test_roundrobin_handler_ForceDiscardOnError(t *testing.T) {
@@ -98,13 +88,8 @@ func Test_roundrobin_handler_ForceDiscardOnError(t *testing.T) {
 	p.Handle(f2)
 	time.Sleep(2 * time.Second)
 
-	if firstCalled != 1 {
-		t.Errorf("Expected %d but got %d", 1, firstCalled)
-	}
-
-	if !secondExecuted {
-		t.Error("Second function should have been executed")
-	}
+	assert.Equal(t, 1, firstCalled)
+	assert.True(t, secondExecuted)
 }
 
 func Test_roundrobin_handler_MessagesInFlight(t *testing.T) {
@@ -119,15 +104,11 @@ func Test_roundrobin_handler_MessagesInFlight(t *testing.T) {
 	p.Handle(f1)
 	p.Handle(f1)
 
-	if p.GetNumberOfMessagesInFlight() != 3 {
-		t.Error("Was supposed to have messages in flight")
-	}
+	assert.Equal(t, int64(3), p.GetNumberOfMessagesInFlight())
 
 	time.Sleep(2 * time.Second)
 
-	if p.GetNumberOfMessagesInFlight() != 0 {
-		t.Error("Was supposed to not have messages in flight")
-	}
+	assert.Equal(t, int64(0), p.GetNumberOfMessagesInFlight())
 }
 
 func Test_roundrobin_handler_HandleDebounceBackoff(t *testing.T) {
@@ -150,9 +131,7 @@ func Test_roundrobin_handler_HandleDebounceBackoff(t *testing.T) {
 	go p.HandleDebounced(f2, "2")
 	time.Sleep(500 * time.Millisecond)
 
-	if secondExecuted {
-		t.Error("Second function should not be executed")
-	}
+	assert.False(t, secondExecuted)
 }
 
 func Test_roundrobin_handler_HandleDebounceWaitToExecute(t *testing.T) {
@@ -169,9 +148,7 @@ func Test_roundrobin_handler_HandleDebounceWaitToExecute(t *testing.T) {
 	p.HandleDebounced(f1, "1")
 	time.Sleep(500 * time.Millisecond)
 
-	if executed {
-		t.Error("function should not be executed")
-	}
+	assert.False(t, executed)
 }
 
 func Test_roundrobin_handler_HandleDebounceDoNotExecuteIfNewMessagesAreComing(t *testing.T) {
@@ -192,9 +169,7 @@ func Test_roundrobin_handler_HandleDebounceDoNotExecuteIfNewMessagesAreComing(t 
 	}()
 	time.Sleep(500 * time.Millisecond)
 
-	if executed {
-		t.Error("function should not be executed")
-	}
+	assert.True(t, executed)
 }
 
 func Test_roundrobin_handler_HandleDebounceDoNotResetTimer(t *testing.T) {
@@ -216,9 +191,7 @@ func Test_roundrobin_handler_HandleDebounceDoNotResetTimer(t *testing.T) {
 	}()
 	time.Sleep(500 * time.Millisecond)
 
-	if !executed {
-		t.Error("function should be executed")
-	}
+	assert.True(t, executed)
 }
 
 func Test_roundrobin_handler_HandleDebounceExecuted(t *testing.T) {
@@ -234,9 +207,7 @@ func Test_roundrobin_handler_HandleDebounceExecuted(t *testing.T) {
 	p.HandleDebounced(f1, "1")
 	time.Sleep(500 * time.Millisecond)
 
-	if !executed {
-		t.Error("function should be executed")
-	}
+	assert.True(t, executed)
 }
 
 func Test_roundrobin_handler_HandleOverwriteExecution(t *testing.T) {
@@ -259,11 +230,6 @@ func Test_roundrobin_handler_HandleOverwriteExecution(t *testing.T) {
 	p.HandleDebounced(f2, "1")
 	time.Sleep(500 * time.Millisecond)
 
-	if firstExecuted {
-		t.Error("first function should not be executed")
-	}
-
-	if !secondExecuted {
-		t.Error("second function should be executed")
-	}
+	assert.False(t, firstExecuted)
+	assert.True(t, secondExecuted)
 }
