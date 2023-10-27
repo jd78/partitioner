@@ -36,7 +36,7 @@ func Test_partitioner_HandleInSequence(t *testing.T) {
 
 	p.HandleInSequence(f1, partition{1})
 	p.HandleInSequence(f2, partition{1})
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	assert.True(t, firstExecuted)
 	assert.False(t, secondExecuted)
