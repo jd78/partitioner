@@ -169,7 +169,7 @@ func Test_roundrobin_handler_HandleDebounceDoNotExecuteIfNewMessagesAreComing(t 
 	}()
 	time.Sleep(500 * time.Millisecond)
 
-	assert.True(t, executed)
+	assert.False(t, executed)
 }
 
 func Test_roundrobin_handler_HandleDebounceDoNotResetTimer(t *testing.T) {
